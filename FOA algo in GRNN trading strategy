@@ -1,0 +1,124 @@
+%fruit fly algorithm
+clc
+clear
+nntwarn off
+
+[data,~,~] = xlsread('C:\SP');
+re = data(:,1);
+log_re = 100*(re(2:end)./re(1:end-1));
+data(2:end,1) = log_re;
+
+train = data(11:1339,1:9)';
+t = data(11:1339,end)';
+
+sample = data(1340:1860,1:9)';
+s = data(1340:1860,end)';
+
+real = data(1861:end,1:9)';
+r = data(1861:end,end)';
+r_index = re(1861:end);
+
+%normalization
+[train,minp,maxp,t,mint,maxt] = premnmx(train,t);
+sample = tramnmx(sample,minp,maxp);
+
+%fruit fly algo
+
+size = 50;
+maxi_n = 20; %iterable number
+
+%initial position
+X_int = -rand();
+Y_int = -rand();
+bsmell = 10e20;
+S_use = 10e20;
+
+for i_n = 1:maxi_n
+    disp(['testing number is ',num2str(i_n)])
+    for i = 1:size
+    X(i) = X_int + 20*rand() -10;
+    Y(i) = X_int + 20*rand() -10;
+    D(i) = (X(i)^2+Y(i)^2)^0.5;
+    S(i) = 1/D(i);
+    if S(i) < 0.01 
+        S(i) = 1;
+    end
+    net = newgrnn(train,t,S(i));
+    s_train = sim(net,sample);
+    s_train = postmnmx(s_train,mint,maxt);
+    y = s_train - s;
+    mse(i) = mean(y.^2);
+    end
+    [bestsmell , smellpos] = min(mse);
+    if bestsmell < bsmell
+        X_int = X(smellpos);
+        Y_int = Y(smellpos);
+        S_use = S(smellpos);
+        bsmell = bestsmell;
+    end
+    group_best(i_n) = bsmell;
+    X_best(i_n) = X_int;
+    Y_best(i_n) = Y_int;
+end
+disp(['the best spread value is ',num2str(S_use)])
+
+real = tramnmx(real,minp,maxp);
+net = newgrnn(train,t,S_use);
+r_predict = sim(net,real);
+r_predict = postmnmx(r_predict,mint,maxt);
+figure(1)
+plot(group_best)
+title('iterable number and mse')
+xlabel('mse')
+ylabel('iterable number')
+figure(2)
+plot(r_predict)
+title('trading signal')
+xlabel('estimated return of index')
+
+%singal trading
+%singal = 1 means we are holding one share of underlying
+%singal = 0 means we aren't hold any position
+
+signal = 0;
+for i = 1 : length(r)-1
+    
+    if r_predict(i) > 0.001 & signal == 1
+        retrade(i) = r_index(i+1) - r_index(i);
+        signal = 1;
+    end
+    if r_predict(i) > 0.001 & signal == 0
+        retrade(i) = r_index(i+1) - r_index(i) - r_index(i)*0.0009;
+        signal = 1;
+    end
+    if r_predict(i) < 0 & signal == 0
+        retrade(i) = 0;
+        signal = 0;
+    end
+    if r_predict(i) < 0 & signal == 1
+        retrade(i) = 0 - r_index(i)*0.0009;
+        signal = 0;
+    end
+    if r_predict(i) > 0 & r_predict(i) < 0.001 & signal == 1
+        retrade(i) = r_index(i+1) - r_index(i);
+        signal = 1;
+    end
+    if r_predict(i) > 0 & r_predict(i) < 0.001 & signal == 0
+        retrade(i) = 0;
+        signal = 0;
+    end
+end
+re_index = r_index(2:end) - r_index(1:end-1);
+cum_retrade = cumsum(retrade);
+cum_rindex  = cumsum(re_index(1:length(retrade)));
+retrade_final = cum_retrade(end);
+reindex_final = cum_rindex(end);
+disp(['The strategy return is ',num2str(retrade_final)])
+disp(['The index return is ',num2str(reindex_final)])
+figure(3)
+plot(cum_retrade) %return of trading strategy
+hold on
+plot(cum_rindex,'-r')  % return of S&P500
+title('Return between SP Index and this strategy') 
+ylabel('point of SP Index')
+legend('return of strategy','return of index') 
