@@ -29,7 +29,7 @@ def Bloomberg_date_transformation():
 
 def data_merge(training_index):
     s_p_data = pd.read_csv('soybeans_sup$use.csv')
-    price_data = pd.read_csv('S_spread_new.csv')
+    price_data = pd.read_csv('S1C1.csv')
     ending_quartly_data = pd.read_csv('S_ending_stock&quarterly_position.csv')
     fundamental_data = pd.merge(s_p_data, ending_quartly_data, on='Dates')
     merge_data = pd.merge(price_data, fundamental_data, on='Dates')
@@ -65,13 +65,13 @@ def data_analysis():
     print(stats.pearsonr(x, y))
 
 
-def sup_computation(now_sup, selected_number, training_index):
+def sup_computation(now_ending_stock, now_sup, selected_number, training_index):
     merge_data_training, merge_data_testing = data_merge(training_index)
     sup_list = []
     sup_price_dict = {}
 
     for i in range(len(merge_data_training)):
-        sup = merge_data_training['S_Sup'].iloc[i]
+        sup = merge_data_training['S_Ending_stock'].iloc[i]
         price = merge_data_training['S1_LAST'].iloc[i]
 
         if sup not in sup_list:
@@ -85,7 +85,6 @@ def sup_computation(now_sup, selected_number, training_index):
     # regression
 
     keys = sup_price_dict.keys()
-    inputs = np.array(list(keys)).astype(np.float).reshape(-1, 1)
     target = []
 
     # plot
@@ -98,20 +97,16 @@ def sup_computation(now_sup, selected_number, training_index):
     sorted_y = []
 
     sorted_x = sorted(x)
-    #for x_index in range(len(x)):
-    #    temp_index = np.where(x == sorted_x[x_index])[0][0]
-    #    sorted_y.append(y[temp_index])
+    for x_index in range(len(x)):
+        temp_index = np.where(x == sorted_x[x_index])[0][0]
+        sorted_y.append(y[temp_index])
 
-    #plt.scatter(sorted_x, sorted_y)
-    #plt.xticks(fontsize=10, rotation=45)
-    #plt.show()
+    reflected_line = -450 * np.log(0.0002 * np.array(sorted_x).astype(np.float))
 
-    # ------------------------
-    #exit()
-    # print(inputs, target)
-
-    clf = svm.SVR(kernel='poly').fit(inputs, target.astype('int'))
-    print(clf.predict(np.array(now_sup).reshape(-1, 1))[0])
+    plt.scatter(sorted_x, reflected_line)
+    plt.scatter(sorted_x, sorted_y)
+    plt.xticks(fontsize=10, rotation=45)
+    plt.show()
 
     # sort
     sorted_list = []
@@ -119,6 +114,8 @@ def sup_computation(now_sup, selected_number, training_index):
     diff_list = np.array(sup_list) - now_sup
     positive_list = diff_list[np.where(diff_list >= 0)[0]]
     negative_list = diff_list[np.where(diff_list < 0)[0]]
+    print(positive_list)
+    print(negative_list)
     for sort_index in range(selected_number):
         sorted_list.append(sorted(positive_list)[sort_index] + now_sup)
         sorted_list.append(sorted(negative_list)[-(sort_index + 1)] + now_sup)
@@ -172,7 +169,69 @@ def use_computation(now_use, selected_number, training_index):
     print(np.mean(combined_price), np.std(combined_price), np.percentile(combined_price, 50))
 
 
+def price_range(now_ending_stock, now_sup, selected_number, training_index):
+    merge_data_training, merge_data_testing = data_merge(training_index)
+
+    sup_list = []
+    sup_price_dict = {}
+
+    for i in range(len(merge_data_training)):
+        sup = merge_data_training['S_Sup'].iloc[i]
+        price = merge_data_training['S1_LAST'].iloc[i]
+
+        if sup not in sup_list:
+            sup_list.append(sup)
+            sup_price_dict[str(sup)] = []
+            sup_price_dict[str(sup)].append(price)
+
+        else:
+            sup_price_dict[str(sup)].append(price)
+
+    # sort
+    sorted_list = []
+    combined_price = []
+    diff_list = np.array(sup_list) - now_sup
+    positive_list = diff_list[np.where(diff_list >= 0)[0]]
+    negative_list = diff_list[np.where(diff_list < 0)[0]]
+    print(diff_list)
+    print(positive_list)
+    print(sorted(negative_list))
+
+    if len(positive_list) < selected_number:
+        position_length = len(positive_list)
+
+        if position_length != 0:
+            for position_index in range(position_length):
+                sorted_list.append(positive_list[position_index] + now_sup)
+
+            for position_index in range(selected_number + (selected_number - position_length)):
+                sorted_list.append(sorted(negative_list)[-(position_index + 1)] + now_sup)
+
+        else:
+            for position_index in range(2 * selected_number):
+                sorted_list.append(sorted(negative_list)[-(position_index + 1)] + now_sup)
+
+    else:
+
+        for sort_index in range(selected_number):
+            sorted_list.append(sorted(positive_list)[sort_index] + now_sup)
+            sorted_list.append(sorted(negative_list)[-(sort_index + 1)] + now_sup)
+
+    for i in range(len(sorted_list)):
+        print(sorted_list[i])
+        temp_list = sup_price_dict[str(sorted_list[i])]
+        combined_price += temp_list
+        print(np.mean(temp_list), np.std(temp_list), np.percentile(temp_list, 50))
+
+    # combined prob computation
+    print(np.mean(combined_price), np.std(combined_price), np.percentile(combined_price, 50))
+
+    price_ending_stock = 3880 - 480 * np.log(0.96 * np.array(now_ending_stock).astype(np.float))
+    print(price_ending_stock)
+
+
 if __name__ == '__main__':
-    training_index = 2000
-    sup_computation(9255, 2, training_index)
-    use_computation(415, 2, training_index)
+    training_index = 2300
+    sup_computation(785, 4999, 2, training_index)
+    price_range(785, 4999, 2, training_index)
+
